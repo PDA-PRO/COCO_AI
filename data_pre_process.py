@@ -6,6 +6,7 @@ import ast
 import re
 import argparse
 from tree_sitter import Language, Parser
+import random
 tokenizer = AutoTokenizer.from_pretrained("huggingface/CodeBERTa-small-v1")
 JSON_LEN=116
 EXTRACT_DESC_PATH="tmp_p_desc/"
@@ -72,6 +73,7 @@ def abstract_pl(code,ident):
         return code,ident
 
 def main():
+    global method,var
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--code_pair_path", default=None, type=str, required=True,
@@ -86,9 +88,11 @@ def main():
     no_desc_id=["p02479","p02480","p02481","p02482","p02483","p02484","p02485","p02486","p02487","p02488","p02489","p02490","p02491","p02492","p02493","p02494","p02495","p02496","p02497","p02498","p02499","p02506","p02510","p02523","p02524","p02525","p02526","p02527","p02528","p02529","p02530","p02531","p02532"]
     p_num=0
 
+    #WA 코드쌍 추출
+    print("extract WA code pair")
     for i in range(JSON_LEN):
         new_json=[]
-        print(i)
+        print(i,end=" ")
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
             json_data = json.load(f)
         for j in range(len(json_data)):
@@ -113,10 +117,11 @@ def main():
                     p_num+=1
         with open(CODE_PAIR_PATH+str(i)+'.json', 'w',encoding='utf-8') as mkf:
             json.dump(new_json, mkf, indent="\t")
-    print("code pair num : ",p_num)
+    print("total WA code pair num : ",p_num)
 
     
     #문제중 score가 400이상인 문제 삭제 및 설명부분 추출
+    print("prepare problem_descriptions")
     p_list=os.listdir(DESC_PATH)
     if not os.path.exists(EXTRACT_DESC_PATH):
         os.mkdir(EXTRACT_DESC_PATH)
@@ -124,7 +129,6 @@ def main():
         if int(i.split(".")[0][1:])>=2479:
             with open(DESC_PATH+i) as html:
                 soup = bs(html, "html.parser")
-                print(i)
                 try:
                     elements = soup.var.text
                     if int(elements)<=300:
@@ -151,7 +155,6 @@ def main():
         else:
             with open(DESC_PATH+i) as html:
                 soup = bs(html, "html.parser")
-                print(i)
                 text=""
                 for j in soup.contents:
                     if j.text.lower()=="input":
@@ -162,6 +165,7 @@ def main():
                 with open(EXTRACT_DESC_PATH+i.split(".")[0]+".txt","w") as desc:
                     desc.write(text)
 
+    
     #특수기호 및 공백제거
     p_list=os.listdir(EXTRACT_DESC_PATH)
     s_symbol={"≠":"!=","\dots":"...", "\cdot":"...", "\ldots":"...", "…":"...","\leq":"<=", "\le":"<=", "≤":"<=", "≦":"<=", "\times": "*","\ge":">=", "\geq":">=","\{": "{","\}": "{"  }
@@ -180,8 +184,10 @@ def main():
     
 
     #코드쌍 추상화
+    print("abstracte code pair")
     for i in range(JSON_LEN):
-        print(i)
+        if i%10==0:
+            print(i,end=" ")
         new_json=[]
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
             json_data = json.load(f)
@@ -199,6 +205,7 @@ def main():
                 json.dump(new_json, mkf, indent="\t")
 
     #nl과 pl 토큰 길이 추출
+    print("extract nl-pl token length : max_token_len ",args.max_token_len)
     removed_num=0
     code_num=0
     desc_list=os.listdir(EXTRACT_DESC_PATH)
@@ -208,7 +215,8 @@ def main():
         os.mkdir(CODE_PAIR_PATH)
     for i in range(JSON_LEN):
         new_json=[]
-        print(i)
+        if i%10==0:
+            print(i,end=" ")
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
             json_data = json.load(f)
             for j in range(len(json_data)):
@@ -234,9 +242,10 @@ def main():
                     code_num+=1
         with open(CODE_PAIR_PATH+str(i)+'.json', 'w',encoding='utf-8') as mkf:
             json.dump(new_json, mkf, indent="\t")
-    print(removed_num,code_num)  
+    print("usable code pair num : ",code_num,"removed num : ",removed_num)  
 
     #문제별 코드 수 
+    print("clac code pair count per problem")
     temp={}
     for i in range(JSON_LEN):
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
@@ -251,6 +260,7 @@ def main():
         json.dump(temp, mkf, indent="\t")
 
     #문제별 코드 수가 100 미만인 코드쌍 및 문제 설명 삭제
+    print("remove code pair and problem description less than count 100")
     removed_num=0
     code_num=0
     with open('nl_pl_p_num.json', 'r') as fff:
@@ -273,10 +283,10 @@ def main():
                         removed_num+=1
             with open(CODE_PAIR_PATH+str(i)+'.json', 'w',encoding='utf-8') as mkf:
                 json.dump(new_json, mkf, indent="\t")
-        print(code_num,removed_num)
+        print("remain count : ",code_num,"remove count : ",removed_num)
 
     #nl + pl 데이터셋 생성
-    import random
+    print("generate nl_pl pair dataset")
     desc_list=os.listdir(EXTRACT_DESC_PATH)
     data={}
     for i in range(len(desc_list)):
