@@ -92,7 +92,8 @@ def main():
     print("extract WA code pair")
     for i in range(JSON_LEN):
         new_json=[]
-        print(i,end=" ")
+        if i%10==0:
+            print(i)
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
             json_data = json.load(f)
         for j in range(len(json_data)):
@@ -187,7 +188,7 @@ def main():
     print("abstracte code pair")
     for i in range(JSON_LEN):
         if i%10==0:
-            print(i,end=" ")
+            print(i)
         new_json=[]
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
             json_data = json.load(f)
@@ -216,7 +217,7 @@ def main():
     for i in range(JSON_LEN):
         new_json=[]
         if i%10==0:
-            print(i,end=" ")
+            print(i)
         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
             json_data = json.load(f)
             for j in range(len(json_data)):
@@ -317,7 +318,7 @@ def main():
             else:
                 val.append({"p_name":p_name,"code":code[i]})
     
-    if os.path.exists("data"):
+    if not os.path.exists("data"):
         os.mkdir("data")
 
     with open("data/train.json","w") as data_set:
