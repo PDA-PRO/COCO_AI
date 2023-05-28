@@ -518,7 +518,7 @@ def main():
         for idx,file in enumerate(files):   
             logger.info("Test file: {}".format(file))
             eval_examples = read_examples(file)
-            eval_features = convert_examples_to_features(eval_examples, tokenizer, args,stage='test')
+            eval_features = convert_examples_to_features(eval_examples, tokenizer, args,args.p_desc_path,stage='test')
             all_source_ids = torch.tensor([f.source_ids for f in eval_features], dtype=torch.long)
             all_source_mask = torch.tensor([f.source_mask for f in eval_features], dtype=torch.long)    
             eval_data = TensorDataset(all_source_ids,all_source_mask)   
