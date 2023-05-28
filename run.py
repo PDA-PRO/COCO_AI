@@ -541,15 +541,23 @@ def main():
                             t=t[:t.index(0)]
                         text = tokenizer.decode(t,clean_up_tokenization_spaces=False)
                         p.append(text)
+
             model.train()
             predictions=[]
             accs=[]
+            test_pred_json=[]
             with open(os.path.join(args.output_dir,"test_{}.output".format(str(idx))),'w') as f, open(os.path.join(args.output_dir,"test_{}.gold".format(str(idx))),'w') as f1:
                 for ref,gold in zip(p,eval_examples):
                     predictions.append(str(gold.idx)+'\t'+ref)
                     f.write(ref+'\n')
-                    f1.write(gold.target+'\n')    
+                    f1.write(gold.target+'\n')
+                    test_pred_json.append({
+                        "ref" : ref,
+                        "target" : gold.target
+                    })    
                     accs.append(ref==gold.target)
+            with open("test_pred.json","w") as file:
+                json.dump(test_pred_json,file)
             dev_bleu=round(_bleu(os.path.join(args.output_dir, "test_{}.gold".format(str(idx))).format(file), 
                                  os.path.join(args.output_dir, "test_{}.output".format(str(idx))).format(file)),2)
             logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))
