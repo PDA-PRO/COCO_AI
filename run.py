@@ -38,7 +38,7 @@ from bleu import _bleu
 from torch.utils.data import DataLoader, Dataset, SequentialSampler, RandomSampler,TensorDataset
 from torch.utils.data.distributed import DistributedSampler
 from transformers import (WEIGHTS_NAME, AdamW, get_linear_schedule_with_warmup,
-                          RobertaConfig, RobertaModel, RobertaTokenizer)
+                          RobertaConfig, RobertaModel, RobertaTokenizer,AutoModelForMaskedLM,AutoTokenizer)
 MODEL_CLASSES = {'roberta': (RobertaConfig, RobertaModel, RobertaTokenizer)}
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -59,21 +59,6 @@ class Example(object):
         self.target = target
         self.p_id=p_id
 
-# def read_examples(filename):
-#     """Read examples from filename."""
-#     examples=[]
-#     with open(filename,encoding="utf-8") as f:
-#         for idx,js in enumerate(json.load(f)):
-#             source=' '.join(js['old_comment_tokens'])
-#             target=' '.join(js['new_comment_tokens'])      
-#             examples.append(
-#                 Example(
-#                         idx = idx,
-#                         source=source,
-#                         target=target,
-#                         ) 
-#             )
-#     return examples
 def read_examples(filename):
     """Read examples from filename."""
     examples=[]
@@ -193,17 +178,11 @@ def main():
     parser = argparse.ArgumentParser()
 
     ## Required parameters  
-    parser.add_argument("--model_type", default=None, type=str, required=True,
-                        help="Model type: e.g. roberta")
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
-                        help="Path to pre-trained model: e.g. roberta-base" )
-    parser.add_argument("--tokenizer_name", default="", required=True,
-                        help="Pretrained tokenizer name or path if not the same as model_name")    
     parser.add_argument("--output_dir", default=None, type=str, required=True,
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument("--load_model_path", default=None, type=str, 
                         help="Path to trained model: Should contain the .bin files" )    
-    parser.add_argument("--p_desc_path", default=None, type=str, 
+    parser.add_argument("--p_desc_path", default=None, type=str, required=True,
                         help="Path to problem descriptions" )  
     ## Other parameters
     parser.add_argument("--train_filename", default=None, type=str,
@@ -286,12 +265,31 @@ def main():
     if os.path.exists(args.output_dir) is False:
         os.makedirs(args.output_dir)
         
-    config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
-    config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path)
-    tokenizer = tokenizer_class.from_pretrained(args.tokenizer_name,do_lower_case=args.do_lower_case)
+    config = {
+  "architectures": [
+    "RobertaForMaskedLM"
+  ],
+  "attention_probs_dropout_prob": 0.1,
+  "bos_token_id": 0,
+  "eos_token_id": 2,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 768,
+  "initializer_range": 0.02,
+  "intermediate_size": 3072,
+  "layer_norm_eps": 1e-05,
+  "max_position_embeddings": 514,
+  "model_type": "roberta",
+  "num_attention_heads": 12,
+  "num_hidden_layers": 6,
+  "pad_token_id": 1,
+  "type_vocab_size": 1,
+  "vocab_size": 52000
+}
+    tokenizer = AutoTokenizer.from_pretrained("huggingface/CodeBERTa-small-v1")
     
     #budild model
-    encoder = model_class.from_pretrained(args.model_name_or_path,config=config)    
+    encoder = AutoModelForMaskedLM.from_pretrained("huggingface/CodeBERTa-small-v1")
     decoder_layer = nn.TransformerDecoderLayer(d_model=config.hidden_size, nhead=config.num_attention_heads)
     decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
     model=Seq2Seq(encoder=encoder,decoder=decoder,config=config,
@@ -486,13 +484,21 @@ def main():
                 model.train()
                 predictions=[]
                 accs=[]
+                test_pred_json=[]
                 with open(os.path.join(args.output_dir,"dev.output"),'w') as f, open(os.path.join(args.output_dir,"dev.gold"),'w') as f1:
                     for ref,gold in zip(p,eval_examples):
                         predictions.append(str(gold.idx)+'\t'+ref)
                         f.write(ref+'\n')
                         f1.write(gold.target+'\n')     
                         accs.append(ref==gold.target)
-
+                        test_pred_json.append({
+                        "refere" : ref,
+                        "target" : gold.target,
+                        "source" : gold.source,
+                        "p_name" : gold.p_id
+                        })    
+                with open("test_pred.json","w") as file:
+                    json.dump(test_pred_json,file)
                 dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev.gold"), os.path.join(args.output_dir, "dev.output")),2)
                 logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))
                 logger.info("  %s = %s "%("xMatch",str(round(np.mean(accs)*100,4))))
@@ -553,7 +559,9 @@ def main():
                     f1.write(gold.target+'\n')
                     test_pred_json.append({
                         "ref" : ref,
-                        "target" : gold.target
+                        "target" : gold.target,
+                        "source" : gold.source,
+                        "p_name" : gold.p_id
                     })    
                     accs.append(ref==gold.target)
             with open("test_pred.json","w") as file:
