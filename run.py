@@ -465,11 +465,13 @@ def main():
                 predictions=[]
                 accs=[]
                 test_pred_json=[]
-                with open(os.path.join(args.output_dir,"dev.output"),'w') as f, open(os.path.join(args.output_dir,"dev.gold"),'w') as f1:
+                with open(os.path.join(args.output_dir,"dev_ref.json"),'w') as f, open(os.path.join(args.output_dir,"dev.gold.json"),'w') as f1:
+                    ref_json=[]
+                    gold_json=[]
                     for ref,gold in zip(p,eval_examples):
                         predictions.append(str(gold.idx)+'\t'+ref)
-                        f.write(ref+'\n')
-                        f1.write(gold.target+'\n')     
+                        ref_json.append(ref)
+                        gold_json.append(gold.target)    
                         accs.append(ref==gold.target)
                         test_pred_json.append({
                         "refere" : ref,
@@ -477,9 +479,11 @@ def main():
                         "source" : gold.source,
                         "p_name" : gold.p_id
                         })    
+                    json.dump(ref_json,f)
+                    json.dump(gold_json,f1)
                 with open("test_pred.json","w") as file:
                     json.dump(test_pred_json,file)
-                dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev.gold"), os.path.join(args.output_dir, "dev.output")),2)
+                dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev_ref.json"), os.path.join(args.output_dir, "dev.gold.json")),2)
                 logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))
                 logger.info("  %s = %s "%("xMatch",str(round(np.mean(accs)*100,4))))
                 logger.info("  "+"*"*20)    
@@ -532,11 +536,13 @@ def main():
             predictions=[]
             accs=[]
             test_pred_json=[]
-            with open(os.path.join(args.output_dir,"test_{}.output".format(str(idx))),'w') as f, open(os.path.join(args.output_dir,"test_{}.gold".format(str(idx))),'w') as f1:
+            with open(os.path.join(args.output_dir,"test_ref_{}.json".format(str(idx))),'w') as f, open(os.path.join(args.output_dir,"test_gold_{}.json".format(str(idx))),'w') as f1:
+                ref_json=[]
+                gold_json=[]
                 for ref,gold in zip(p,eval_examples):
                     predictions.append(str(gold.idx)+'\t'+ref)
-                    f.write(ref+'\n')
-                    f1.write(gold.target+'\n')
+                    ref_json.append(ref)
+                    gold_json.append(gold.target)
                     test_pred_json.append({
                         "ref" : ref,
                         "target" : gold.target,
@@ -544,10 +550,12 @@ def main():
                         "p_name" : gold.p_id
                     })    
                     accs.append(ref==gold.target)
+                json.dump(ref_json,f)
+                json.dump(gold_json,f1)
             with open("test_pred.json","w") as file:
                 json.dump(test_pred_json,file)
-            dev_bleu=round(_bleu(os.path.join(args.output_dir, "test_{}.gold".format(str(idx))).format(file), 
-                                 os.path.join(args.output_dir, "test_{}.output".format(str(idx))).format(file)),2)
+            dev_bleu=round(_bleu(os.path.join(args.output_dir, "test_ref_{}.json".format(str(idx))).format(file), 
+                                 os.path.join(args.output_dir, "test_gold_{}.json".format(str(idx))).format(file)),2)
             logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))
             logger.info("  %s = %s "%("xMatch",str(round(np.mean(accs)*100,4))))
             logger.info("  "+"*"*20)    
