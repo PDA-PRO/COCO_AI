@@ -52,18 +52,13 @@ from parser import (remove_comments_and_docstrings,
 from tree_sitter import Language, Parser
 logger = logging.getLogger(__name__)
 dfg_function={
-    'python':DFG_python,
-    'java':DFG_java,
-    'ruby':DFG_ruby,
-    'go':DFG_go,
-    'php':DFG_php,
-    'javascript':DFG_javascript
+    'python':DFG_python
 }
 
 #load parsers
 parsers={}        
 for lang in dfg_function:
-    LANGUAGE = Language('parser/my-languages.so', lang)
+    LANGUAGE = Language('./COCO_AI/graphcodebert/parser/my-languages.so', lang)
     parser = Parser()
     parser.set_language(LANGUAGE) 
     parser = [parser,dfg_function[lang]]    
