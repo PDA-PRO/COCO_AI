@@ -63,7 +63,7 @@ dfg_function={
 #load parsers
 parsers={}        
 for lang in dfg_function:
-    LANGUAGE = Language('/home/sjw/coco_ai/refinement/parser/my-languages.so', lang)
+    LANGUAGE = Language('parser/my-languages.so', lang)
     parser = Parser()
     parser.set_language(LANGUAGE) 
     parser = [parser,dfg_function[lang]]    
@@ -172,9 +172,14 @@ def convert_examples_to_features(examples, tokenizer, args,p_desc_path,stage=Non
             ori2cur_pos[i]=(ori2cur_pos[i-1][1],ori2cur_pos[i-1][1]+len(code_tokens[i]))    
         code_tokens=[y for x in code_tokens for y in x]  
         
+        #problem description
+        p_desc_tokens=[]
+        with open(os.path.join(p_desc_path,example.p_id+".txt"),"r") as p_desc_file:
+            p_desc_tokens=tokenizer.tokenize(p_desc_file.read())
+
         #truncating
         code_tokens=code_tokens[:args.max_source_length-3]
-        source_tokens =[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
+        source_tokens =[tokenizer.cls_token]+p_desc_tokens+[tokenizer.sep_token]+code_tokens+[tokenizer.sep_token]
         source_ids =  tokenizer.convert_tokens_to_ids(source_tokens)
         position_idx = [i+tokenizer.pad_token_id + 1 for i in range(len(source_tokens))]
         dfg=dfg[:args.max_source_length-len(source_tokens)]
@@ -295,7 +300,9 @@ def main():
     parser.add_argument("--output_dir", default=None, type=str, required=True,
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument("--load_model_path", default=None, type=str, 
-                        help="Path to trained model: Should contain the .bin files" )    
+                        help="Path to trained model: Should contain the .bin files" )   
+    parser.add_argument("--p_desc_path", default=None, type=str, required=True,
+                        help="Path to problem descriptions" )  
     ## Other parameters
     parser.add_argument("--train_filename", default=None, type=str, 
                         help="The train filename. Should contain the .jsonl files for this task.")
@@ -396,7 +403,7 @@ def main():
     if args.do_train:
         # Prepare training data loader
         train_examples = read_examples(args.train_filename)
-        train_features = convert_examples_to_features(train_examples, tokenizer,args,stage='train')
+        train_features = convert_examples_to_features(train_examples, tokenizer,args,args.p_desc_path,stage='train')
         train_data = TextDataset(train_features,args)
         train_sampler = RandomSampler(train_data)
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size//args.gradient_accumulation_steps,num_workers=4)
@@ -457,7 +464,7 @@ def main():
                     eval_examples,eval_data=dev_dataset['dev_loss']
                 else:
                     eval_examples = read_examples(args.dev_filename)
-                    eval_features = convert_examples_to_features(eval_examples, tokenizer, args,stage='dev')
+                    eval_features = convert_examples_to_features(eval_examples, tokenizer, args,args.p_desc_path,stage='dev')
                     eval_data = TextDataset(eval_features,args)
                     dev_dataset['dev_loss']=eval_examples,eval_data
                 eval_sampler = SequentialSampler(eval_data)
@@ -513,7 +520,7 @@ def main():
                 else:
                     eval_examples = read_examples(args.dev_filename)
                     eval_examples = random.sample(eval_examples,min(1000,len(eval_examples)))
-                    eval_features = convert_examples_to_features(eval_examples, tokenizer, args,stage='test')
+                    eval_features = convert_examples_to_features(eval_examples, tokenizer, args,args.p_desc_path,stage='test')
                     eval_data = TextDataset(eval_features,args)
                     dev_dataset['dev_bleu']=eval_examples,eval_data
 
@@ -536,12 +543,25 @@ def main():
                 model.train()
                 predictions=[]
                 accs=[]
-                with open(os.path.join(args.output_dir,"dev.output"),'w') as f, open(os.path.join(args.output_dir,"dev.gold"),'w') as f1:
+                test_pred_json=[]
+                with open(os.path.join(args.output_dir,"dev_ref.json"),'w') as f, open(os.path.join(args.output_dir,"dev.gold.json"),'w') as f1:
+                    ref_json=[]
+                    gold_json=[]
                     for ref,gold in zip(p,eval_examples):
-                        predictions.append(ref)
-                        f.write(ref+'\n')
-                        f1.write(gold.target+'\n')     
+                        predictions.append(str(gold.idx)+'\t'+ref)
+                        ref_json.append(ref)
+                        gold_json.append(gold.target) 
                         accs.append(ref==gold.target)
+                        test_pred_json.append({
+                        "refere" : ref,
+                        "target" : gold.target,
+                        "source" : gold.source,
+                        "p_name" : gold.p_id
+                        })    
+                    json.dump(ref_json,f)
+                    json.dump(gold_json,f1)
+                with open("test_pred.json","w") as file:
+                    json.dump(test_pred_json,file)
 
                 dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev.gold"), os.path.join(args.output_dir, "dev.output")),2)
                 xmatch=round(np.mean(accs)*100,4)
@@ -569,7 +589,7 @@ def main():
         for idx,file in enumerate(files):   
             logger.info("Test file: {}".format(file))
             eval_examples = read_examples(file)
-            eval_features = convert_examples_to_features(eval_examples, tokenizer, args,stage='test')
+            eval_features = convert_examples_to_features(eval_examples, tokenizer, args,args.p_desc_path,stage='test')
             eval_data = TextDataset(eval_features,args) 
 
             # Calculate bleu
@@ -593,12 +613,25 @@ def main():
             model.train()
             predictions=[]
             accs=[]
-            with open(os.path.join(args.output_dir,"test_{}.output".format(str(idx))),'w') as f, open(os.path.join(args.output_dir,"test_{}.gold".format(str(idx))),'w') as f1:
+            test_pred_json=[]
+            with open(os.path.join(args.output_dir,"test_ref_{}.json".format(str(idx))),'w') as f, open(os.path.join(args.output_dir,"test_gold_{}.json".format(str(idx))),'w') as f1:
+                ref_json=[]
+                gold_json=[]
                 for ref,gold in zip(p,eval_examples):
-                    predictions.append(ref)
-                    f.write(ref+'\n')
-                    f1.write(gold.target+'\n')    
+                    predictions.append(str(gold.idx)+'\t'+ref)
+                    ref_json.append(ref)
+                    gold_json.append(gold.target)
                     accs.append(ref==gold.target)
+                    test_pred_json.append({
+                        "ref" : ref,
+                        "target" : gold.target,
+                        "source" : gold.source,
+                        "p_name" : gold.p_id
+                    })    
+                json.dump(ref_json,f)
+                json.dump(gold_json,f1)
+            with open("test_pred.json","w") as file:
+                json.dump(test_pred_json,file)
             dev_bleu=round(_bleu(os.path.join(args.output_dir, "test_{}.gold".format(str(idx))).format(file), 
                                  os.path.join(args.output_dir, "test_{}.output".format(str(idx))).format(file)),2)
             logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))

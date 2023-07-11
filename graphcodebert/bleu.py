@@ -23,6 +23,7 @@ evaluation metrics for machine translation. COLING 2004.
 
 import collections
 import math
+import json
 
 
 def _get_ngrams(segment, max_order):
@@ -119,7 +120,9 @@ def _bleu(ref_file, trans_file, subword_option=None):
     reference_text = []
     for reference_filename in ref_files:
         with open(reference_filename) as fh:
-            reference_text.append(fh.readlines())
+            contents = fh.read()
+            json_data = json.loads(contents)
+            reference_text.append(json_data)
     per_segment_references = []
     for references in zip(*reference_text):
         reference_list = []
@@ -128,7 +131,9 @@ def _bleu(ref_file, trans_file, subword_option=None):
         per_segment_references.append(reference_list)
     translations = []
     with open(trans_file) as fh:
-        for line in fh:
+        contents = fh.read()
+        json_data = json.loads(contents)
+        for line in json_data:
             translations.append(line.strip().split())
     bleu_score, _, _, _, _, _ = compute_bleu(per_segment_references, translations, max_order, smooth)
     return round(100 * bleu_score,2)
