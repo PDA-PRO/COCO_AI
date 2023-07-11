@@ -536,14 +536,12 @@ def main():
                             text = tokenizer.decode(t,clean_up_tokenization_spaces=False)
                             p.append(text)
                 model.train()
-                predictions=[]
                 accs=[]
                 test_pred_json=[]
                 with open(os.path.join(args.output_dir,"dev_ref.json"),'w') as f, open(os.path.join(args.output_dir,"dev.gold.json"),'w') as f1:
                     ref_json=[]
                     gold_json=[]
                     for ref,gold in zip(p,eval_examples):
-                        predictions.append(str(gold.idx)+'\t'+ref)
                         ref_json.append(ref)
                         gold_json.append(gold.target) 
                         accs.append(ref==gold.target)
@@ -606,14 +604,12 @@ def main():
                         text = tokenizer.decode(t,clean_up_tokenization_spaces=False)
                         p.append(text)
             model.train()
-            predictions=[]
             accs=[]
             test_pred_json=[]
             with open(os.path.join(args.output_dir,"test_ref_{}.json".format(str(idx))),'w') as f, open(os.path.join(args.output_dir,"test_gold_{}.json".format(str(idx))),'w') as f1:
                 ref_json=[]
                 gold_json=[]
                 for ref,gold in zip(p,eval_examples):
-                    predictions.append(str(gold.idx)+'\t'+ref)
                     ref_json.append(ref)
                     gold_json.append(gold.target)
                     accs.append(ref==gold.target)
