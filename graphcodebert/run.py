@@ -556,7 +556,7 @@ def main():
                 with open("test_pred.json","w") as file:
                     json.dump(test_pred_json,file)
 
-                dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev.gold"), os.path.join(args.output_dir, "dev.output")),2)
+                dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev_ref.gold"), os.path.join(args.output_dir, "dev.gold.output")),2)
                 xmatch=round(np.mean(accs)*100,4)
                 logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))
                 logger.info("  %s = %s "%("xMatch",str(round(np.mean(accs)*100,4))))
@@ -623,8 +623,8 @@ def main():
                 json.dump(gold_json,f1)
             with open("test_pred.json","w") as file:
                 json.dump(test_pred_json,file)
-            dev_bleu=round(_bleu(os.path.join(args.output_dir, "test_{}.gold".format(str(idx))).format(file), 
-                                 os.path.join(args.output_dir, "test_{}.output".format(str(idx))).format(file)),2)
+            dev_bleu=round(_bleu(os.path.join(args.output_dir, "test_ref_{}.gold".format(str(idx))).format(file), 
+                                 os.path.join(args.output_dir, "test_gold_{}.output".format(str(idx))).format(file)),2)
             logger.info("  %s = %s "%("bleu-4",str(dev_bleu)))
             logger.info("  %s = %s "%("xMatch",str(round(np.mean(accs)*100,4))))
             logger.info("  "+"*"*20)   
