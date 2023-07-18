@@ -171,10 +171,11 @@ def convert_examples_to_features(examples, tokenizer, args,p_desc_path,stage=Non
         p_desc_tokens=[]
         with open(os.path.join(p_desc_path,example.p_id+".txt"),"r") as p_desc_file:
             p_desc_tokens=tokenizer.tokenize(p_desc_file.read())
+        p_desc_length=len(p_desc_tokens)+1
 
         #truncating
         code_tokens=code_tokens[:args.max_source_length-3]
-        source_tokens =[tokenizer.cls_token]+code_tokens+[tokenizer.sep_token]
+        source_tokens =[tokenizer.cls_token]+p_desc_tokens+[tokenizer.sep_token]+code_tokens+[tokenizer.sep_token]
         source_ids =  tokenizer.convert_tokens_to_ids(source_tokens)
         position_idx = [i+tokenizer.pad_token_id + 1 for i in range(len(source_tokens))]
         dfg=dfg[:args.max_source_length-len(source_tokens)]
@@ -196,7 +197,7 @@ def convert_examples_to_features(examples, tokenizer, args,p_desc_path,stage=Non
         dfg_to_dfg=[x[-1] for x in dfg]
         dfg_to_code=[ori2cur_pos[x[1]] for x in dfg]
         length=len([tokenizer.cls_token])
-        dfg_to_code=[(x[0]+length,x[1]+length) for x in dfg_to_code]        
+        dfg_to_code=[(x[0]+length+p_desc_length,x[1]+length+p_desc_length) for x in dfg_to_code]        
 
         #target
         if stage=="test":

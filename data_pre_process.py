@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+from transformers import AutoTokenizer, AutoModelForMaskedLM,RobertaTokenizer
 import json
 import os
 from bs4 import BeautifulSoup as bs
@@ -7,7 +7,7 @@ import re
 import argparse
 from tree_sitter import Language, Parser
 import random
-tokenizer = AutoTokenizer.from_pretrained("huggingface/CodeBERTa-small-v1")
+
 JSON_LEN=116
 EXTRACT_DESC_PATH="tmp_p_desc/"
 method=0
@@ -82,11 +82,14 @@ def main():
                         help="problem descriptions path")
     parser.add_argument("--max_token_len", default=256, type=int, required=False,
                         help="max token length")
+    parser.add_argument("--tokenizer_name", default="", type=str,
+                        help="Pretrained tokenizer name or path if not the same as model_name") 
     args = parser.parse_args()
     CODE_PAIR_PATH=args.code_pair_path
     DESC_PATH=args.p_desc_path
     no_desc_id=["p02479","p02480","p02481","p02482","p02483","p02484","p02485","p02486","p02487","p02488","p02489","p02490","p02491","p02492","p02493","p02494","p02495","p02496","p02497","p02498","p02499","p02506","p02510","p02523","p02524","p02525","p02526","p02527","p02528","p02529","p02530","p02531","p02532"]
     p_num=0
+    tokenizer = RobertaTokenizer.from_pretrained(args.tokenizer_name)
 
     #WA 코드쌍 추출
     print("extract WA code pair")
