@@ -1,1 +1,5 @@
 *.pyc
+.venv
+desc
+*.bin
+config.py
