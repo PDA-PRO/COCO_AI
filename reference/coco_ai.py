@@ -22,15 +22,18 @@ from config import AiConfig
 
 class Ai():
     def __init__(self):
-        self.result = 0
+        #로거 설정
         logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
         self.logger = logging.getLogger(__name__)
 
+        #data flow graph 생성에 필요한 tree_parser 설정
         PY_LANGUAGE = Language(AiConfig.parser_path+"my-languages.so", 'python')
         self.tree_parser = Parser()
         self.tree_parser.set_language(PY_LANGUAGE)
+
+        #코드 추상화에 필요한 변수
         self.method=0
         self.var=0
         
@@ -46,6 +49,7 @@ class Ai():
         torch.cuda.manual_seed(42)
         torch.backends.cudnn.deterministic = True
 
+        #베이스 모델및 설정, 토크나이저 설정
         config_class, model_class, tokenizer_class = RobertaConfig, RobertaModel, RobertaTokenizer
         config = config_class.from_pretrained("microsoft/graphcodebert-base")
         self.tokenizer = tokenizer_class.from_pretrained("microsoft/graphcodebert-base")
@@ -58,6 +62,7 @@ class Ai():
                     beam_size=AiConfig.beam_size,max_length=AiConfig.max_target_length,
                     sos_id=self.tokenizer.cls_token_id,eos_id=self.tokenizer.sep_token_id)
 
+        #모델 불러오기
         self.model.load_state_dict(torch.load(AiConfig.model_path),strict=False)
 
         self.model.to(self.device)
@@ -65,8 +70,10 @@ class Ai():
             # multi-gpu training
             self.model = torch.nn.DataParallel(self.model)
 
-    #remove comments, tokenize code and extract dataflow
     def extract_dataflow(self,code, lang):
+        """
+        remove comments, tokenize code and extract dataflow
+        """
         #remove comments
         try:
             code=remove_comments_and_docstrings(code,lang)
@@ -138,7 +145,10 @@ class Ai():
             self.source_mask = source_mask
             self.target_mask = target_mask
 
-    def convert_examples_to_features(self,examples, tokenizer, stage=None):
+    def convert_examples_to_features(self,examples, tokenizer):
+        """
+        모델에 입력값으로 쓸 수 있도록 임베딩
+        """
         features = []
         for example_index, example in enumerate(tqdm(examples,total=len(examples))):
             ##extract data flow
@@ -182,31 +192,13 @@ class Ai():
             length=len([tokenizer.cls_token])
             dfg_to_code=[(x[0]+length+p_desc_length,x[1]+length+p_desc_length) for x in dfg_to_code]
 
-            #target
-            if stage=="test":
-                target_tokens = tokenizer.tokenize("None")
-            else:
-                target_tokens = tokenizer.tokenize(example.target)[:AiConfig.max_target_length-2]
+            target_tokens = tokenizer.tokenize("None")
             target_tokens = [tokenizer.cls_token]+target_tokens+[tokenizer.sep_token]
             target_ids = tokenizer.convert_tokens_to_ids(target_tokens)
             target_mask = [1] *len(target_ids)
             padding_length = AiConfig.max_target_length - len(target_ids)
             target_ids+=[tokenizer.pad_token_id]*padding_length
             target_mask+=[0]*padding_length
-
-            if example_index < 5:
-                if stage=='train':
-                    self.logger.info("*** Example ***")
-                    self.logger.info("source_tokens: {}".format([x.replace('\u0120','_') for x in source_tokens]))
-                    self.logger.info("source_ids: {}".format(' '.join(map(str, source_ids))))
-                    self.logger.info("source_mask: {}".format(' '.join(map(str, source_mask))))
-                    self.logger.info("position_idx: {}".format(position_idx))
-                    self.logger.info("dfg_to_code: {}".format(' '.join(map(str, dfg_to_code))))
-                    self.logger.info("dfg_to_dfg: {}".format(' '.join(map(str, dfg_to_dfg))))
-
-                    self.logger.info("target_tokens: {}".format([x.replace('\u0120','_') for x in target_tokens]))
-                    self.logger.info("target_ids: {}".format(' '.join(map(str, target_ids))))
-                    self.logger.info("target_mask: {}".format(' '.join(map(str, target_mask))))
 
             features.append(
                 self.InputFeatures(
@@ -223,6 +215,9 @@ class Ai():
         return features
     
     class TextDataset(Dataset):
+        """
+        모델 입력 형식에 맞도록 데이터셋을 텐서로 변환
+        """
         def __init__(self, examples):
             self.examples = examples
 
@@ -281,6 +276,9 @@ class Ai():
             return old_code
 
     def abstract_pl(self,code,ident):
+        """
+        raw code를 추상화
+        """
         tree = self.tree_parser.parse(bytes(code, "utf8"))
         root_node = tree.root_node
         self.method,self.var=0,0
@@ -307,6 +305,17 @@ class Ai():
         return code,ident
     
     def process(self,code,p_id):
+        """
+        모델 추론
+        p_id를 풀이하는 raw code중 틀린 곳을 고친 코드를 리턴
+
+        params
+        - code : raw code
+        - p_id : 문제 번호 ex) "p00001"
+        -------------------------------------------
+        return
+        - 틀린 곳을 고친 코드
+        """
         #AST로 변환 후 code로 재변환으로 코드 일반화, tab 공백("    ")을 이스케이프문자 \t로 변환
         node=ast.parse(code)
         generalized_code=ast.unparse(node).replace("    ","\t")
@@ -322,7 +331,7 @@ class Ai():
                             target="",
                             p_id=p_id
                             )]
-        eval_features = self.convert_examples_to_features(eval_examples, self.tokenizer,stage='test')
+        eval_features = self.convert_examples_to_features(eval_examples, self.tokenizer)
         eval_data = self.TextDataset(eval_features)
 
         # Calculate bleu
@@ -350,3 +359,4 @@ class Ai():
         print(p)
         print("-------------------------------")
         print(code)
+        return p[0]
