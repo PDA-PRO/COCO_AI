@@ -500,12 +500,23 @@ xMatch : 37.0
 
 ---
 
-## **8\. 참고문헌**
+## **8\. Reference**
 
+GraphCodeBERT paper
+[https://arxiv.org/pdf/2009.08366.pdf](https://arxiv.org/pdf/2009.08366.pdf)
+
+GraphCodeBERT github
 [https://github.com/microsoft/CodeBERT/tree/master/GraphCodeBERT/refinement](https://github.com/microsoft/CodeBERT/tree/master/GraphCodeBERT/refinement)
 
-[https://github.com/IBM/Project\_CodeNet](https://github.com/IBM/Project_CodeNet)
+CodeNet DataSet paper
+[https://arxiv.org/pdf/1812.06469.pdf](https://arxiv.org/pdf/1812.06469.pdf)
 
+CodeNet DataSet github
+[https://github.com/IBM/Project_CodeNet](https://github.com/IBM/Project_CodeNet)
+
+refinment paper
 [https://arxiv.org/abs/1812.08693](https://arxiv.org/abs/1812.08693)
 
+FixEval dataset github
 [https://github.com/mahimanzum/FixEval](https://github.com/mahimanzum/FixEval)
+
