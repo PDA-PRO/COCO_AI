@@ -10,17 +10,17 @@ import logging
 import numpy as np
 from io import open
 import torch.nn as nn
-from model import Seq2Seq
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset, SequentialSampler
 from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer)
-from parser.DFG import DFG_python
-from parser.utils import (remove_comments_and_docstrings,
+from .parser.DFG import DFG_python
+from .parser.utils import (remove_comments_and_docstrings,
                    tree_to_token_index,
                    index_to_code_token)
-from config import AiConfig
+from .config import AiConfig
+from .model import Seq2Seq
 
-class Ai():
+class WPC():
     def __init__(self):
         #로거 설정
         logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -28,8 +28,11 @@ class Ai():
                     level = logging.INFO)
         self.logger = logging.getLogger(__name__)
 
+        #폴더경로 추출
+        self.folder_path='/'.join(__file__.split("/")[:-2])
+
         #data flow graph 생성에 필요한 tree_parser 설정
-        PY_LANGUAGE = Language(AiConfig.parser_path+"my-languages.so", 'python')
+        PY_LANGUAGE = Language(self.folder_path+"/reference/parser/my-languages.so", 'python')
         self.tree_parser = Parser()
         self.tree_parser.set_language(PY_LANGUAGE)
 
@@ -63,7 +66,10 @@ class Ai():
                     sos_id=self.tokenizer.cls_token_id,eos_id=self.tokenizer.sep_token_id)
 
         #모델 불러오기
-        self.model.load_state_dict(torch.load(AiConfig.model_path),strict=False)
+        if torch.cuda.is_available():
+            self.model.load_state_dict(torch.load(self.folder_path+"/pytorch_model.bin"),strict=False)
+        else:
+            self.model.load_state_dict(torch.load(self.folder_path+"/pytorch_model.bin",map_location='cpu'),strict=False)
 
         self.model.to(self.device)
         if self.n_gpu > 1:
@@ -149,6 +155,7 @@ class Ai():
         """
         모델에 입력값으로 쓸 수 있도록 임베딩
         """
+        total_source_len=0
         features = []
         for example_index, example in enumerate(tqdm(examples,total=len(examples))):
             ##extract data flow
@@ -159,12 +166,18 @@ class Ai():
             for i in range(len(code_tokens)):
                 ori2cur_pos[i]=(ori2cur_pos[i-1][1],ori2cur_pos[i-1][1]+len(code_tokens[i]))
             code_tokens=[y for x in code_tokens for y in x]
+            total_source_len+=len(code_tokens)
 
             #problem description
             p_desc_tokens=[]
-            with open(os.path.join(AiConfig.p_desc_path,example.p_id+".txt"),"r") as p_desc_file:
+            with open(self.folder_path+"/desc/"+example.p_id+".txt","r") as p_desc_file:
                 p_desc_tokens=tokenizer.tokenize(p_desc_file.read())
             p_desc_length=len(p_desc_tokens)+1
+            total_source_len+=p_desc_length+3
+
+            #최대 토큰을 넘는지 확인
+            if total_source_len>=AiConfig.max_source_length:
+                return None
 
             #truncating
             code_tokens=code_tokens[:AiConfig.max_source_length-3]
@@ -332,6 +345,8 @@ class Ai():
                             p_id=p_id
                             )]
         eval_features = self.convert_examples_to_features(eval_examples, self.tokenizer)
+        if eval_features is None:#최대 토큰 512를 넘으면 종료
+            return None
         eval_data = self.TextDataset(eval_features)
 
         # Calculate bleu
@@ -356,7 +371,9 @@ class Ai():
                     p.append(text)
         print(ident_list)
         print("-------------------------------")
-        print(p)
+        print(p[0])
         print("-------------------------------")
         print(code)
         return p[0]
+    
+wpc=WPC()

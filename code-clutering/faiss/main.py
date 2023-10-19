@@ -78,7 +78,7 @@ def process(task_id:int,code:Annotated[str, Body(embed=True)]):
         return_list=clustering(task_id,code)
         return return_list
     except Exception as e:
-        raise HTTPException(500,e)
+        raise HTTPException(500,str(e))
 
 @app.get('/hello')
 def ready():

@@ -83,8 +83,12 @@ class Seq2Seq(nn.Module):
             return outputs
         else:
             #Predict 
-            preds=[]       
-            zero=torch.cuda.LongTensor(1).fill_(0)     
+            preds=[]   
+            zero=None
+            if torch.cuda.is_available():
+                zero=torch.cuda.LongTensor(1).fill_(0)   
+            else:
+                zero=torch.LongTensor(1).fill_(0)    
             for i in range(source_ids.shape[0]):
                 context=encoder_output[:,i:i+1]
                 context_mask=source_mask[i:i+1,:]
@@ -117,14 +121,17 @@ class Seq2Seq(nn.Module):
 class Beam(object):
     def __init__(self, size,sos,eos):
         self.size = size
-        self.tt = torch.cuda
+        self.tt=None
+        if torch.cuda.is_available():
+            self.tt = torch.cuda
+        else:
+            self.tt=torch
         # The score for each translation on the beam.
         self.scores = self.tt.FloatTensor(size).zero_()
         # The backpointers at each time-step.
         self.prevKs = []
         # The outputs at each time-step.
-        self.nextYs = [self.tt.LongTensor(size)
-                       .fill_(0)]
+        self.nextYs = [self.tt.LongTensor(size).fill_(0)]
         self.nextYs[0][0] = sos
         # Has EOS topped the beam yet.
         self._eos = eos
