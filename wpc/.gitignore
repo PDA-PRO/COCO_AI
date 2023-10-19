@@ -3,3 +3,4 @@
 *.so
 *.txt
 !requirements.txt
+!p_list.txt

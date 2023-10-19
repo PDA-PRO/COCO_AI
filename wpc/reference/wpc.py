@@ -328,13 +328,16 @@ class WPC():
         -------------------------------------------
         return
         - 틀린 곳을 고친 코드
+        - 원래의 버그가 있는 코드
         """
+        p_desc_filename=p_id+".txt"
+        if p_desc_filename not in os.listdir(self.folder_path+"/desc"):
+            raise Exception(p_desc_filename+" 문제 설명문이 존재하지 않습니다.")
         #AST로 변환 후 code로 재변환으로 코드 일반화, tab 공백("    ")을 이스케이프문자 \t로 변환
         node=ast.parse(code)
         generalized_code=ast.unparse(node).replace("    ","\t")
         #주석 제거
         generalized_code=self.remove_multi_line_comment(generalized_code)
-
         #코드 변수, 함수 이름 추상화
         ident_list={}
         abstracted_code,ident_list=self.abstract_pl(generalized_code,ident_list)
@@ -373,7 +376,7 @@ class WPC():
         print("-------------------------------")
         print(p[0])
         print("-------------------------------")
-        print(code)
-        return p[0]
+        print(generalized_code)
+        return p[0],generalized_code
     
 wpc=WPC()
