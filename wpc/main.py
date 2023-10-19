@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-# from reference.wpc import wpc
+from reference.wpc import wpc
 app = FastAPI()
 
 origins = [
