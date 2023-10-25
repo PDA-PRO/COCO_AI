@@ -8,7 +8,7 @@
 
 이 기능을 WPC(Wrong Part of code)라고 명명합니다.
 
-### 2) AI의 중요성과 활용 가능성 간단히 언급
+### 2) 중요성과 활용 가능성
 
 알고리즘 문제 풀이 중 자신이 작성한 코드 내에서 논리적으로 잘못된 곳으로 인해 오답이 되었을 때 스스로 제출 코드 내에서 어떤 부분이 잘못된 것인지 찾고 고치지 못하는 것을 방지하기 위해 이 모델을 개발하게 되었습니다.
 
@@ -52,7 +52,6 @@ GraphCodeBERT - CodeBERT가 소스 코드의 semantic-level structure에 대한 
 
 ![wpc 모델 구조 drawio](https://github.com/PDA-PRO/COCO_AI/assets/80380576/b876afa3-d156-4813-af6b-2cf6274afbbc)
 
-
 최종적으로 수정이 완료된 모델의 전체 구조입니다.
 
 ---
@@ -63,14 +62,14 @@ GraphCodeBERT - CodeBERT가 소스 코드의 semantic-level structure에 대한 
 
 \- algorithm problem description
 
-[https://developer.ibm.com/exchanges/data/all/project-codenet/](https://developer.ibm.com/exchanges/data/all/project-codenet/) 
+[https://developer.ibm.com/exchanges/data/all/project-codenet/](https://developer.ibm.com/exchanges/data/all/project-codenet/)
 
 IBM Research에서 만든 프로그래밍과 소프트웨어 개발에 관련된 대규모 데이터셋, 다양한 알고리즘 문제와 각 문제에 제출된 다양한 언어의 코드로 이루어져있다.
 
 \- bug code - fixed code 쌍 데이터
 
 FixEval: Execution-based Evaluation of Program Fixes for Competitive Programming Problems 의 데이터 셋을 활용  
-codenet의 데이터셋중에서 파이썬으로 작성한 코드만 뽑아내고 한 유저가 한가지 문제를 풀어내기까지의 코드 변화내역을 1:m으로 엮은 데이터셋   
+codenet의 데이터셋중에서 파이썬으로 작성한 코드만 뽑아내고 한 유저가 한가지 문제를 풀어내기까지의 코드 변화내역을 1:m으로 엮은 데이터셋
 
 ### 2) 데이터 전처리
 
@@ -85,13 +84,20 @@ codenet의 데이터셋중에서 파이썬으로 작성한 코드만 뽑아내�
 
 으로 진행된다.
 
-[https://github.com/PDA-PRO/COCO\_AI/blob/main/wpc-finetuning/data\_pre\_process.py](https://github.com/PDA-PRO/COCO_AI/blob/main/wpc-finetuning/data_pre_process.py)
+[https://github.com/PDA-PRO/COCO_AI/blob/main/wpc-finetuning/data_pre_process.py](https://github.com/PDA-PRO/COCO_AI/blob/main/wpc-finetuning/data_pre_process.py)
 
 자세한 전처리 코드는 위 링크를 참고바랍니다.
+
+https://colab.research.google.com/drive/1BBkHdZIsGjUOTp34IGECnWXZywopkHTy?usp=sharing  
+위 링크 및 [coco-ai데이터생성](https://github.com/PDA-PRO/COCO_AI/blob/main/wpc-finetuning/coco-ai_데이터생성.ipynb) 를 참고하여 학습 데이터셋을 생성할 수 있습니다.
 
 ---
 
 ## **5\. 모델 훈련**
+
+### 0) 모델 훈련 해보기
+
+[graphcodebert\_학습](https://github.com/PDA-PRO/COCO_AI/blob/main/wpc-finetuning/graphcodebert_학습.ipynb) 를 참고하여 학습을 진행할 수 있습니다.
 
 ### 1) 모델 훈련
 
@@ -128,9 +134,9 @@ Google Colab A100 고용량 RAM 을 사용하여 10epoch 씩 총 20epoch 학습 
 \*\*\*\*\* Running evaluation \*\*\*\*\*  
 09/10/2023 07:43:18 - INFO - \_\_main\_\_ -     Num examples = 25381  
 09/10/2023 07:43:18 - INFO - \_\_main\_\_ -     Batch size = 32  
-09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     eval\_ppl = 1.1595  
-09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     global\_step = 55981  
-09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     train\_loss = 0.029  
+09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     eval_ppl = 1.1595  
+09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     global_step = 55981  
+09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     train_loss = 0.029  
 09/10/2023 07:47:45 - INFO - \_\_main\_\_ -     \*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*  
 09/10/2023 08:08:31 - INFO - \_\_main\_\_ -     bleu-4 = 73.64   
 09/10/2023 08:08:31 - INFO - \_\_main\_\_ -     xMatch = 37.0   
@@ -145,11 +151,11 @@ epoch 10 loss 0.0338: 100%|██████████| 5598/5598 \[1:3
 
 09/10/2023 09:46:47 - INFO - \_\_main\_\_ - Batch size = 32
 
-09/10/2023 09:51:14 - INFO - \_\_main\_\_ - eval\_ppl = 1.15586
+09/10/2023 09:51:14 - INFO - \_\_main\_\_ - eval_ppl = 1.15586
 
-09/10/2023 09:51:14 - INFO - \_\_main\_\_ - global\_step = 61579
+09/10/2023 09:51:14 - INFO - \_\_main\_\_ - global_step = 61579
 
-09/10/2023 09:51:14 - INFO - \_\_main\_\_ - train\_loss = 0.0338
+09/10/2023 09:51:14 - INFO - \_\_main\_\_ - train_loss = 0.0338
 
 09/10/2023 09:51:14 - INFO - \_\_main\_\_ - \*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*\*
 
@@ -180,7 +186,6 @@ xMatch : 37.0
 ---
 
 ## **8\. 참고문헌**
-
 
 GraphCodeBERT paper
 [https://arxiv.org/pdf/2009.08366.pdf](https://arxiv.org/pdf/2009.08366.pdf)
