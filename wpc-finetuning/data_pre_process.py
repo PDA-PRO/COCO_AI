@@ -80,7 +80,7 @@ def main():
                         help="code pair dataset path")
     parser.add_argument("--p_desc_path", default=None, type=str, required=True,
                         help="problem descriptions path")
-    parser.add_argument("--max_token_len", default=256, type=int, required=False,
+    parser.add_argument("--max_token_len", default=512, type=int, required=False,
                         help="max token length")
     parser.add_argument("--tokenizer_name", default="", type=str,
                         help="Pretrained tokenizer name or path if not the same as model_name") 
@@ -248,46 +248,48 @@ def main():
             json.dump(new_json, mkf, indent="\t")
     print("usable code pair num : ",code_num,"removed num : ",removed_num)  
 
-    #문제별 코드 수 
-    print("clac code pair count per problem")
-    temp={}
-    for i in range(JSON_LEN):
-        with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
-            json_data = json.load(f)
-            for j in range(len(json_data)):
-                p_id=json_data[j][0]["problem_id"]
-                try:
-                    temp[p_id]+=1
-                except:
-                    temp[p_id]=1
-    with open('nl_pl_p_num.json', 'w',encoding='utf-8') as mkf:
-        json.dump(temp, mkf, indent="\t")
+    # 100미만의 코드쌍을 삭제하는 것이 의미없다고 판단되어 주석 처리
 
-    #문제별 코드 수가 100 미만인 코드쌍 및 문제 설명 삭제
-    print("remove code pair and problem description less than count 100")
-    removed_num=0
-    code_num=0
-    with open('nl_pl_p_num.json', 'r') as fff:
-        p_num = json.load(fff)
-        temp={}
-        for i in range(JSON_LEN):
-            new_json=[]
-            print(i)
-            with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
-                json_data = json.load(f)
-                for j in range(len(json_data)):
-                    code_pair=json_data[j]
-                    p_id=code_pair[0]["problem_id"]
-                    if p_num[p_id]>=100:
-                        new_json.append(code_pair)
-                        code_num+=1
-                    else:
-                        if os.path.exists(EXTRACT_DESC_PATH+p_id+".txt"):
-                            os.remove(EXTRACT_DESC_PATH+p_id+".txt")
-                        removed_num+=1
-            with open(CODE_PAIR_PATH+str(i)+'.json', 'w',encoding='utf-8') as mkf:
-                json.dump(new_json, mkf, indent="\t")
-        print("remain count : ",code_num,"remove count : ",removed_num)
+    # #문제별 코드 수 
+    # print("clac code pair count per problem")
+    # temp={}
+    # for i in range(JSON_LEN):
+    #     with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
+    #         json_data = json.load(f)
+    #         for j in range(len(json_data)):
+    #             p_id=json_data[j][0]["problem_id"]
+    #             try:
+    #                 temp[p_id]+=1
+    #             except:
+    #                 temp[p_id]=1
+    # with open('nl_pl_p_num.json', 'w',encoding='utf-8') as mkf:
+    #     json.dump(temp, mkf, indent="\t")
+
+    # #문제별 코드 수가 100 미만인 코드쌍 및 문제 설명 삭제
+    # print("remove code pair and problem description less than count 100")
+    # removed_num=0
+    # code_num=0
+    # with open('nl_pl_p_num.json', 'r') as fff:
+    #     p_num = json.load(fff)
+    #     temp={}
+    #     for i in range(JSON_LEN):
+    #         new_json=[]
+    #         print(i)
+    #         with open(CODE_PAIR_PATH+str(i)+'.json', 'r') as f:
+    #             json_data = json.load(f)
+    #             for j in range(len(json_data)):
+    #                 code_pair=json_data[j]
+    #                 p_id=code_pair[0]["problem_id"]
+    #                 if p_num[p_id]>=100:
+    #                     new_json.append(code_pair)
+    #                     code_num+=1
+    #                 else:
+    #                     if os.path.exists(EXTRACT_DESC_PATH+p_id+".txt"):
+    #                         os.remove(EXTRACT_DESC_PATH+p_id+".txt")
+    #                     removed_num+=1
+    #         with open(CODE_PAIR_PATH+str(i)+'.json', 'w',encoding='utf-8') as mkf:
+    #             json.dump(new_json, mkf, indent="\t")
+    #     print("remain count : ",code_num,"remove count : ",removed_num)
 
     #nl + pl 데이터셋 생성
     print("generate nl_pl pair dataset")
