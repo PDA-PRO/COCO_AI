@@ -87,13 +87,13 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
    - gpu로 테스트하기
 
    ```bash
-   docker run --gpus all -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.1
+   docker run --gpus all --name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.1
    ```
 
    - gpu없이 cpu로만 테스트하기
 
    ```bash
-   docker run -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.1
+   docker run --name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.1
    ```
 
 ### 실행하기
