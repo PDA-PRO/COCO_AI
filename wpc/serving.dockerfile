@@ -12,7 +12,7 @@ ADD task_detail.json ./task_detail.json
 
 COPY requirements.txt /coco/requirements.txt
 RUN pip install -r /coco/requirements.txt
-RUN sed -i 's/\r$//' ./start.sh
+RUN sed -i 's/\r$//' ./build.sh
 RUN ./build.sh
 
 EXPOSE 8000
