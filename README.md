@@ -75,7 +75,7 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
 1. 도커 이미지를 불러옵니다.
 
    ```bash
-   docker pull styughjvbn/coco-ai:1.0.0
+   docker pull styughjvbn/coco-ai:1.0.1
    ```
 
    네트워크의 상황에 따라 모든 설정이 완료 될 때까지 5~30분의 시간이 소요될 수 있습니다.
@@ -87,13 +87,13 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
    - gpu로 테스트하기
 
    ```bash
-   docker run --gpus all -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.0
+   docker run --gpus all -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.1
    ```
 
    - gpu없이 cpu로만 테스트하기
 
    ```bash
-   docker run -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.0
+   docker run -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.1
    ```
 
 ### 실행하기
