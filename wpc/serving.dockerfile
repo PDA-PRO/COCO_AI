@@ -10,9 +10,9 @@ ADD build.py ./build.py
 ADD main.py ./main.py
 ADD task_detail.json ./task_detail.json
 
-
 COPY requirements.txt /coco/requirements.txt
 RUN pip install -r /coco/requirements.txt
+RUN sed -i 's/\r$//' ./start.sh
 RUN ./build.sh
 
 EXPOSE 8000

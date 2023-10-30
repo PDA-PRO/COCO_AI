@@ -42,14 +42,14 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
 1. 저장소 복제하기
 
    ```bash
-   git clone -b wpc https://github.com/PDA-PRO/COCO_AI.git
+   git clone https://github.com/PDA-PRO/COCO_AI.git
    cd COCO_AI/wpc
    ```
 
 2. 도커 이미지를 빌드하기
 
    ```bash
-   docker build -t wpc
+   docker build -t coco-ai
    ```
 
    네트워크의 상황에 따라 모든 설정이 완료 될 때까지 5~30분의 시간이 소요될 수 있습니다.
@@ -60,21 +60,21 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
 
    - gpu로 테스트하기
 
-   ```powershell
-   docker run --gpus all -it -p <port>:8000 wpc:lastet
+   ```bash
+   docker run --gpus all --name coco-ai -it -p <port>:8000 coco-ai:lastet
    ```
 
-   - gpu없이 cpu로만 테스트하기,
+   - gpu없이 cpu로만 테스트하기
 
-   ```powershell
-   docker run -it -p <port>:8000 wpc:lastet
+   ```bash
+   docker run --name coco-ai -it -p <port>:8000 coco-ai:lastet
    ```
 
 #### 도커 이미지를 불러와서 설치하기
 
 1. 도커 이미지를 불러옵니다.
 
-   ```powershell
+   ```bash
    docker pull styughjvbn/coco-ai:1.0.0
    ```
 
@@ -84,16 +84,16 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
 
    모델을 테스트하기 위해 원하는 \<port\>를 지정해주세요
 
-   - Operates with gpu
+   - gpu로 테스트하기
 
-   ```powershell
-   docker run --gpus all -it -p <port>:8000 styughjvbn/coco-ai:1.0.0
+   ```bash
+   docker run --gpus all -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.0
    ```
 
-   - Operates without gpu, only cpu
+   - gpu없이 cpu로만 테스트하기
 
-   ```powershell
-   docker run -it -p <port>:8000 styughjvbn/coco-ai:1.0.0
+   ```bash
+   docker run -name coco-ai -it -p <port>:8000 styughjvbn/coco-ai:1.0.0
    ```
 
 ### 실행하기
