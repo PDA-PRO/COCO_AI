@@ -1,4 +1,24 @@
-#WA 코드쌍 추출
+# coding=utf-8
+# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
+# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+Fine-tuning the library models for language modeling on a text file (GPT, GPT-2, BERT, RoBERTa).
+GPT and GPT-2 are fine-tuned using a causal language modeling (CLM) loss while BERT and RoBERTa are fine-tuned
+using a masked language modeling (MLM) loss.
+"""
+
 from __future__ import absolute_import
 import ast
 import re
@@ -151,6 +171,7 @@ class WPC():
             self.source_mask = source_mask
             self.target_mask = target_mask
 
+    ## 2023.7 모델 입력 임베딩으로 문제 설명 추가
     def convert_examples_to_features(self,examples, tokenizer):
         """
         모델에 입력값으로 쓸 수 있도록 임베딩
@@ -287,7 +308,7 @@ class WPC():
             return new_code
         else:
             return old_code
-
+    ## 2023.7 코드 추상화를 위한 함수 추가
     def abstract_pl(self,code,ident):
         """
         raw code를 추상화
