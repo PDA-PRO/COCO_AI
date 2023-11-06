@@ -46,7 +46,10 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
    cd COCO_AI/wpc
    ```
 
-2. 도커 이미지를 빌드하기
+2. 미세 조정된 모델 파라미터 다운로드 및 `COCO_AI/wpc`폴더로 이동  
+   [pytorch_model.bin](https://drive.google.com/file/d/15hw7W_dWtZituw4-alawS-mdG8X4Vj38/view?usp=sharing)
+
+3. 도커 이미지를 빌드하기
 
    ```bash
    docker build -t coco-ai
@@ -54,7 +57,7 @@ WSL2를 이용한 설치방법과 Hyper-V를 이용한 설치방법으로 나누
 
    네트워크의 상황에 따라 모든 설정이 완료 될 때까지 5~30분의 시간이 소요될 수 있습니다.
 
-3. 컨테이너 실행하기
+4. 컨테이너 실행하기
 
    모델을 테스트하기 위해 원하는 \<port\>를 지정해주세요
 
