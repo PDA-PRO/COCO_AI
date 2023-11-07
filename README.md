@@ -110,3 +110,4 @@ Swagger를 사용하여 모델을 테스트해볼 수 있습니다.
 현재 저희의 모델은 컴퓨터 자원의 부족, 학습 데이터셋의 질과 양의 한계로 좋은 성능을 내지 못합니다. 저희의 [학습 과정](https://github.com/PDA-PRO/COCO_AI/tree/main/wpc-finetuning#readme)을 참고해서 더욱 좋은 모델을 만들어 보세요
 
 ## 라이선스
+[Apache2.0](https://www.apache.org/licenses/LICENSE-2.0)
