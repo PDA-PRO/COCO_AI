@@ -3,5 +3,6 @@ tqdm==4.65.0
 transformers==4.31.0
 tree-sitter==0.20.1
 tree-sitter-python
+codebleu
 uvicorn==0.23.2
 fastapi==0.103.2
