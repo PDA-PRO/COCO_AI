@@ -25,6 +25,7 @@ import ast
 import json
 import re
 import tree_sitter_python as tspython
+from tree_sitter import Language, Parser
 import os
 import torch
 import random
@@ -36,15 +37,15 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset, SequentialSampler
 from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer)
 from codebleu import calc_codebleu
-from .parser.DFG import DFG_python
-from .parser.utils import (remove_comments_and_docstrings,
+from parser.DFG import DFG_python
+from parser.utils import (remove_comments_and_docstrings,
                    tree_to_token_index,
                    index_to_code_token)
-from .config import AiConfig
-from .model import Seq2Seq
+from config import AiConfig
+from model import Seq2Seq
 
 class WPC():
-    def __init__(self):
+    def __init__(self, drive_path):
         #로거 설정
         logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -53,6 +54,7 @@ class WPC():
 
         #폴더경로 추출
         self.folder_path='/'.join(__file__.split("/")[:-2])
+        self.drive_path = drive_path
 
         #data flow graph 생성에 필요한 tree_parser 설정
         PY_LANGUAGE = Language(tspython.language())
@@ -89,9 +91,9 @@ class WPC():
 
         #모델 불러오기
         if torch.cuda.is_available():
-            self.model.load_state_dict(torch.load(self.folder_path+"/pytorch_model.bin"),strict=False)
+            self.model.load_state_dict(torch.load(os.path.join(drive_path,"pytorch_model.bin")),strict=False)
         else:
-            self.model.load_state_dict(torch.load(self.folder_path+"/pytorch_model.bin",map_location='cpu'),strict=False)
+            self.model.load_state_dict(torch.load(os.path.join(drive_path,"pytorch_model.bin"),map_location='cpu'),strict=False)
 
         self.model.to(self.device)
         if self.n_gpu > 1:
@@ -176,9 +178,10 @@ class WPC():
         """
         모델에 입력값으로 쓸 수 있도록 임베딩
         """
-        total_source_len=0
         features = []
+        skiped = []
         for example_index, example in enumerate(tqdm(examples,total=len(examples))):
+            total_source_len=0
             ##extract data flow
             code_tokens,dfg=self.extract_dataflow(example.source)
             code_tokens=[tokenizer.tokenize('@ '+x)[1:] if idx!=0 else tokenizer.tokenize(x) for idx,x in enumerate(code_tokens)]
@@ -198,7 +201,15 @@ class WPC():
 
             #최대 토큰을 넘는지 확인
             if total_source_len>=AiConfig.max_source_length:
-                return None
+                skiped.append({
+                    "id" : example.p_id,
+                    "source" : example.source,
+                    "target" : example.target,
+                    "len_code_token" : len(code_tokens),
+                    "len_p_desc_token" : p_desc_length,
+                    "len_total" : total_source_len
+                })
+                continue
 
             #truncating
             code_tokens=code_tokens[:AiConfig.max_source_length-3]
@@ -246,6 +257,9 @@ class WPC():
                     target_mask,
                 )
             )
+        
+        with open("skiped_code.json", "w", encoding="utf-8") as file:
+            json.dump(skiped, file, ensure_ascii=False, indent=2)
         return features
     
     class TextDataset(Dataset):
@@ -351,7 +365,7 @@ class WPC():
                             p_id=json_data[j]["p_name"]
                             ) 
                 )
-
+        print(len(examples))
         return examples
 
     def run(self, test_file):
@@ -361,7 +375,7 @@ class WPC():
 
         # Calculate bleu
         eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=64,num_workers=4)
+        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=64,num_workers=2)
 
         self.model.eval()
         p=[]
@@ -391,9 +405,77 @@ class WPC():
         with open("test_pred.json","w") as file:
             json.dump(test_pred_json,file)
 
+    def run_batch(self, test_file):
+        eval_examples = self.read_examples(test_file)
+        total_samples = len(eval_examples)
+        print(f"총 {total_samples}개의 데이터를 처리합니다.")
+
+        eval_features = self.convert_examples_to_features(eval_examples, self.tokenizer)
+        eval_data = self.TextDataset(eval_features)
+
+        eval_sampler = SequentialSampler(eval_data)
+        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=1, num_workers=2)
+
+        self.model.eval()
+        result_file = "test_pred.jsonl"
+        log_interval = 1000  # 1000개마다 로그
+        error_count = 0
+        processed_count = 0
+
+        print(f"[INFO] Using device: {self.device}")
+        print(f"[INFO] Model device: {next(self.model.parameters()).device}")
+        print(f"len(eval_examples): {len(eval_examples)}")
+        print(f"len(eval_features): {len(eval_features)}")
+        print(f"len(eval_data): {len(eval_data)}")
+        print(f"len(eval_dataloader): {len(eval_dataloader)}")
+
+        with open(result_file, "w", encoding="utf-8") as file:
+            start_idx = 0  # eval_examples 인덱스
+
+            for batch_idx, batch in enumerate(tqdm(eval_dataloader, total=len(eval_dataloader))):
+                batch = tuple(t.to(self.device) for t in batch)
+                source_ids, source_mask, position_idx, att_mask, target_ids, target_mask = batch
+
+                with torch.no_grad():
+                    preds = self.model(source_ids, source_mask, position_idx, att_mask)
+                    for i, pred in enumerate(preds):
+                        try:
+                            t = pred[0].cpu().numpy()
+                            t = list(t)
+                            if 0 in t:
+                                t = t[:t.index(0)]
+                            text = self.tokenizer.decode(t, clean_up_tokenization_spaces=False)
+
+                            gold = eval_examples[start_idx]
+                            result = calc_codebleu(
+                                [text], [gold.target],
+                                lang="python",
+                                weights=(0.25, 0.25, 0.25, 0.25),
+                                tokenizer=self.tokenizer
+                            )
+                            json_obj = {
+                                "ref": text,
+                                "target": gold.target,
+                                "source": gold.source,
+                                "p_name": gold.p_id,
+                                "codebleu": result
+                            }
+                            file.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
+                        except Exception as e:
+                            error_count += 1
+                            print(f"[ERROR] Sample {start_idx} failed: {str(e)}")
+                        finally:
+                            start_idx += 1
+                            processed_count += 1
+                            if processed_count % log_interval == 0:
+                                print(f"[LOG] {processed_count} / {total_samples} samples processed.")
+
+        print(f"전체 {total_samples}개 중 정상 처리: {processed_count - error_count}개, 오류: {error_count}개.")
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--test_file", default=None, type=str, required=True)
+    parser.add_argument("--drive_path", default=None, type=str, required=True)
     args = parser.parse_args()
-    wpc=WPC()
-    wpc.run(args.test_file)
+    wpc=WPC(args.drive_path)
+    wpc.run_batch(args.test_file)
