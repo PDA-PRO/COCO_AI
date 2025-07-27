@@ -36,7 +36,6 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader, Dataset, SequentialSampler
 from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer)
-from codebleu import calc_codebleu
 from parser.DFG import DFG_python
 from parser.utils import (remove_comments_and_docstrings,
                    tree_to_token_index,
@@ -45,7 +44,7 @@ from config import AiConfig
 from model import Seq2Seq
 
 class WPC():
-    def __init__(self, drive_path):
+    def __init__(self, model_path):
         #로거 설정
         logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -54,7 +53,7 @@ class WPC():
 
         #폴더경로 추출
         self.folder_path='/'.join(__file__.split("/")[:-2])
-        self.drive_path = drive_path
+        self.model_path = model_path
 
         #data flow graph 생성에 필요한 tree_parser 설정
         PY_LANGUAGE = Language(tspython.language())
@@ -91,9 +90,9 @@ class WPC():
 
         #모델 불러오기
         if torch.cuda.is_available():
-            self.model.load_state_dict(torch.load(os.path.join(drive_path,"pytorch_model.bin")),strict=False)
+            self.model.load_state_dict(torch.load(os.path.join(model_path,"pytorch_model.bin")),strict=False)
         else:
-            self.model.load_state_dict(torch.load(os.path.join(drive_path,"pytorch_model.bin"),map_location='cpu'),strict=False)
+            self.model.load_state_dict(torch.load(os.path.join(model_path,"pytorch_model.bin"),map_location='cpu'),strict=False)
 
         self.model.to(self.device)
         if self.n_gpu > 1:
@@ -173,7 +172,7 @@ class WPC():
             self.source_mask = source_mask
             self.target_mask = target_mask
 
-    ## 2023.7 모델 입력 임베딩으로 문제 설명 추가
+
     def convert_examples_to_features(self,examples, tokenizer):
         """
         모델에 입력값으로 쓸 수 있도록 임베딩
@@ -322,7 +321,7 @@ class WPC():
             return new_code
         else:
             return old_code
-    ## 2023.7 코드 추상화를 위한 함수 추가
+    
     def abstract_pl(self,code,ident):
         """
         raw code를 추상화
@@ -365,50 +364,12 @@ class WPC():
                             p_id=json_data[j]["p_name"]
                             ) 
                 )
-        print(len(examples))
+
         return examples
 
-    def run(self, test_file):
-        eval_examples = self.read_examples(test_file)
-        eval_features = self.convert_examples_to_features(eval_examples, self.tokenizer)
-        eval_data = self.TextDataset(eval_features)
-
-        # Calculate bleu
-        eval_sampler = SequentialSampler(eval_data)
-        eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=64,num_workers=2)
-
-        self.model.eval()
-        p=[]
-        for batch in tqdm(eval_dataloader,total=len(eval_dataloader)):
-            batch = tuple(t.to(self.device) for t in batch)
-            source_ids,source_mask,position_idx,att_mask,target_ids,target_mask = batch
-            with torch.no_grad():
-                preds = self.model(source_ids,source_mask,position_idx,att_mask)
-                for pred in preds:
-                    t=pred[0].cpu().numpy()
-                    t=list(t)
-                    if 0 in t:
-                        t=t[:t.index(0)]
-                    text = self.tokenizer.decode(t,clean_up_tokenization_spaces=False)
-                    p.append(text)
-        
-        test_pred_json=[]
-        for ref,gold in zip(p,eval_examples):
-            result = calc_codebleu([ref], [gold.target], lang="python", weights=(0.25, 0.25, 0.25, 0.25), tokenizer=self.tokenizer)
-            test_pred_json.append({
-                "ref" : ref,
-                "target" : gold.target,
-                "source" : gold.source,
-                "p_name" : gold.p_id,
-                "codebleu" : result
-            })    
-        with open("test_pred.json","w") as file:
-            json.dump(test_pred_json,file)
-
-    def run_batch(self, test_file):
-        eval_examples = self.read_examples(test_file)
+    def run_batch(self, test_data_file, result_path):
+        eval_examples = self.read_examples(test_data_file)
         total_samples = len(eval_examples)
-        print(f"총 {total_samples}개의 데이터를 처리합니다.")
 
         eval_features = self.convert_examples_to_features(eval_examples, self.tokenizer)
         eval_data = self.TextDataset(eval_features)
@@ -417,14 +378,15 @@ class WPC():
         eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=1, num_workers=2)
 
         self.model.eval()
-        result_file = "test_pred.jsonl"
+        test_data_file_name = os.path.splitext(os.path.basename(test_data_file))[0]
+        result_file = os.path.join(result_path, f"pred_{test_data_file_name}.jsonl")
         log_interval = 1000  # 1000개마다 로그
         error_count = 0
         processed_count = 0
 
         print(f"[INFO] Using device: {self.device}")
         print(f"[INFO] Model device: {next(self.model.parameters()).device}")
-        print(f"len(eval_examples): {len(eval_examples)}")
+        print(f"total_samples: {total_samples}")
         print(f"len(eval_features): {len(eval_features)}")
         print(f"len(eval_data): {len(eval_data)}")
         print(f"len(eval_dataloader): {len(eval_dataloader)}")
@@ -439,32 +401,26 @@ class WPC():
                 with torch.no_grad():
                     preds = self.model(source_ids, source_mask, position_idx, att_mask)
                     for i, pred in enumerate(preds):
+                        text = ""
                         try:
                             t = pred[0].cpu().numpy()
                             t = list(t)
                             if 0 in t:
                                 t = t[:t.index(0)]
                             text = self.tokenizer.decode(t, clean_up_tokenization_spaces=False)
-
-                            gold = eval_examples[start_idx]
-                            result = calc_codebleu(
-                                [text], [gold.target],
-                                lang="python",
-                                weights=(0.25, 0.25, 0.25, 0.25),
-                                tokenizer=self.tokenizer
-                            )
-                            json_obj = {
-                                "ref": text,
-                                "target": gold.target,
-                                "source": gold.source,
-                                "p_name": gold.p_id,
-                                "codebleu": result
-                            }
-                            file.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
                         except Exception as e:
+                            text = "[ERROR]"
                             error_count += 1
                             print(f"[ERROR] Sample {start_idx} failed: {str(e)}")
                         finally:
+                            gold = eval_examples[start_idx]
+                            json_obj = {
+                                "pred": text,
+                                "target": gold.target,
+                                "source": gold.source,
+                                "p_name": gold.p_id
+                            }
+                            file.write(json.dumps(json_obj, ensure_ascii=False) + "\n")
                             start_idx += 1
                             processed_count += 1
                             if processed_count % log_interval == 0:
@@ -474,8 +430,9 @@ class WPC():
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test_file", default=None, type=str, required=True)
-    parser.add_argument("--drive_path", default=None, type=str, required=True)
+    parser.add_argument("--test_data_file", default=None, type=str, required=True)
+    parser.add_argument("--model_path", default=None, type=str, required=True)
+    parser.add_argument("--result_path", default="./", type=str)
     args = parser.parse_args()
-    wpc=WPC(args.drive_path)
-    wpc.run_batch(args.test_file)
+    wpc=WPC(args.model_path)
+    wpc.run_batch(args.test_data_file, args.result_path)
