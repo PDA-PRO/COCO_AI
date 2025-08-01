@@ -171,6 +171,7 @@ def convert_examples_to_features(examples, tokenizer, args,p_desc_path,stage=Non
         p_desc_tokens=[]
         with open(os.path.join(p_desc_path,example.p_id+".txt"),"r") as p_desc_file:
             p_desc_tokens=tokenizer.tokenize(p_desc_file.read())
+        p_desc_length=len(p_desc_tokens)+1
 
         #truncating
         code_tokens=code_tokens[:args.max_source_length-3]
@@ -196,7 +197,7 @@ def convert_examples_to_features(examples, tokenizer, args,p_desc_path,stage=Non
         dfg_to_dfg=[x[-1] for x in dfg]
         dfg_to_code=[ori2cur_pos[x[1]] for x in dfg]
         length=len([tokenizer.cls_token])
-        dfg_to_code=[(x[0]+length,x[1]+length) for x in dfg_to_code]        
+        dfg_to_code=[(x[0]+length+p_desc_length,x[1]+length+p_desc_length) for x in dfg_to_code]        
 
         #target
         if stage=="test":
@@ -388,7 +389,7 @@ def main():
     
     if args.load_model_path is not None:
         logger.info("reload model from {}".format(args.load_model_path))
-        model.load_state_dict(torch.load(args.load_model_path))
+        model.load_state_dict(torch.load(args.load_model_path),strict=False)
         
     model.to(device)
     if args.n_gpu > 1:
@@ -413,7 +414,8 @@ def main():
             {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
         optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=len(train_dataloader)*args.num_train_epochs*0.1,num_training_steps=len(train_dataloader)*args.num_train_epochs)
+        scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
+                                                    num_training_steps=len(train_dataloader)*args.num_train_epochs)
     
         #Start training
         logger.info("***** Running training *****")
@@ -553,7 +555,7 @@ def main():
                         })    
                     json.dump(ref_json,f)
                     json.dump(gold_json,f1)
-                with open("test_pred.json","w") as file:
+                with open("val_pred.json","w") as file:
                     json.dump(test_pred_json,file)
 
                 dev_bleu=round(_bleu(os.path.join(args.output_dir, "dev_ref.json"), os.path.join(args.output_dir, "dev.gold.json")),2)

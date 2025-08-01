@@ -5,26 +5,17 @@ from bs4 import BeautifulSoup as bs
 import ast
 import re
 import argparse
-from tree_sitter import Language, Parser
 import random
+import tree_sitter_python as tspython
+from tree_sitter import Language, Parser
+
+PY_LANGUAGE = Language(tspython.language())
+parser = Parser(PY_LANGUAGE)
 
 JSON_LEN=116
 EXTRACT_DESC_PATH="tmp_p_desc/"
 method=0
 var=0
-
-#토큰화에 필요한 tree_sitter 준비
-Language.build_library(
-# Store the library in the `build` directory
-'build/my-languages.so',
-# Include one or more languages
-[
-    'tree-sitter-python'
-]
-)
-PY_LANGUAGE = Language('build/my-languages.so', 'python')
-parser = Parser()
-parser.set_language(PY_LANGUAGE)
 
 def remove_multi_line_comment(old_code):
     p = re.compile('(\"\"\")')

@@ -22,7 +22,7 @@ using a masked language modeling (MLM) loss.
 from __future__ import absolute_import
 import ast
 import re
-from tree_sitter import Language, Parser
+import tree_sitter_python as tspython
 import os
 import torch
 import random
@@ -52,9 +52,8 @@ class WPC():
         self.folder_path='/'.join(__file__.split("/")[:-2])
 
         #data flow graph 생성에 필요한 tree_parser 설정
-        PY_LANGUAGE = Language(self.folder_path+"/reference/parser/my-languages.so", 'python')
-        self.tree_parser = Parser()
-        self.tree_parser.set_language(PY_LANGUAGE)
+        PY_LANGUAGE = Language(tspython.language())
+        self.tree_parser = Parser(PY_LANGUAGE)
 
         #코드 추상화에 필요한 변수
         self.method=0
@@ -96,18 +95,16 @@ class WPC():
             # multi-gpu training
             self.model = torch.nn.DataParallel(self.model)
 
-    def extract_dataflow(self,code, lang):
+    def extract_dataflow(self,code):
         """
         remove comments, tokenize code and extract dataflow
         """
         #remove comments
         try:
-            code=remove_comments_and_docstrings(code,lang)
+            code=remove_comments_and_docstrings(code)
         except:
             pass
         #obtain dataflow
-        if lang=="php":
-            code="<?php"+code+"?>"
         try:
             tree = self.tree_parser.parse(bytes(code,'utf8'))
             root_node = tree.root_node
@@ -180,7 +177,7 @@ class WPC():
         features = []
         for example_index, example in enumerate(tqdm(examples,total=len(examples))):
             ##extract data flow
-            code_tokens,dfg=self.extract_dataflow(example.source,'python')
+            code_tokens,dfg=self.extract_dataflow(example.source)
             code_tokens=[tokenizer.tokenize('@ '+x)[1:] if idx!=0 else tokenizer.tokenize(x) for idx,x in enumerate(code_tokens)]
             ori2cur_pos={}
             ori2cur_pos[-1]=(0,0)
