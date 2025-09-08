@@ -296,25 +296,6 @@ def check_p03437(input_data: str, expected_output: str, actual_output: str) -> b
         return val > 0 and val % X == 0 and val % Y != 0
     except Exception:
         return False
-    
-def check_p00000(input_data: str, expected_output: str, actual_output: str):
-    """구구단 출력 비교: 줄바꿈 무시하고, 틀린 위치 설명 제공"""
-    # 줄바꿈 통일
-    exp_lines = expected_output.strip().replace('\r\n', '\n').split('\n')
-    act_lines = actual_output.strip().replace('\r\n', '\n').split('\n')
-
-    # 줄 개수부터 비교
-    if len(exp_lines) != len(act_lines):
-        print(f"Line count mismatch: expected {len(exp_lines)} lines, got {len(act_lines)}")
-        return False
-
-    # 줄 단위 비교
-    for i, (e_line, a_line) in enumerate(zip(exp_lines, act_lines), start=1):
-        if e_line.strip() != a_line.strip():
-            print(f"Mismatch at line {i}:\nExpected: {e_line!r}\nActual  : {a_line!r}")
-            return False
-
-    return True, "Passed"
 
 # 문제 이름을 키로 하여 검증 함수를 저장
 SPECIAL_CHECKERS = {
@@ -324,8 +305,7 @@ SPECIAL_CHECKERS = {
     "p03545": check_p03545,
     "p03583": check_p03583,
     "p03910": check_p03910,
-    "p03437": check_p03437,
-    "p00000": check_p00000
+    "p03437": check_p03437
 }
 
 # ========== 메인 실행 ==========
