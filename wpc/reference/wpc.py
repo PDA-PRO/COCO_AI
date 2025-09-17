@@ -22,6 +22,7 @@ using a masked language modeling (MLM) loss.
 from __future__ import absolute_import
 import ast
 import re
+from tree_sitter import Language, Parser
 import tree_sitter_python as tspython
 import os
 import torch
