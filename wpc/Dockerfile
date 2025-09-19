@@ -1,13 +1,12 @@
 FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
 WORKDIR /coco
-RUN apt-get update && apt-get install -y gcc git unzip
 COPY reference ./reference
 COPY desc ./desc
-ADD pytorch_model.bin ./pytorch_model.bin
+ADD wpc_bundle.pt ./wpc_bundle.pt
 ADD main.py ./main.py
 ADD task_detail.json ./task_detail.json
-RUN unzip desc/desc.zip -d desc
+RUN python -m zipfile -e desc/desc.zip desc
 
 COPY requirements.txt /coco/requirements.txt
 RUN pip install -r /coco/requirements.txt

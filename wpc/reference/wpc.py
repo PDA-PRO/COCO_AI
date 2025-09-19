@@ -22,8 +22,7 @@ import ast
 import re
 from tree_sitter import Language, Parser
 import tree_sitter_python as tspython
-import os
-import torch
+import os, tempfile, shutil, torch
 import random
 import logging
 from io import open
@@ -44,6 +43,9 @@ class WPC():
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=logging.INFO)
         self.logger = logging.getLogger(__name__)
+
+        # 문제 설명 토큰 캐시
+        self._desc_cache = {}
 
         # 폴더경로 추출
         self.folder_path = '/'.join(__file__.split("/")[:-2])
@@ -67,6 +69,17 @@ class WPC():
         torch.backends.cudnn.deterministic = False
         torch.backends.cudnn.benchmark = True
 
+        self.load_model_from_pt()
+
+        if use_dataparallel and torch.cuda.device_count() > 1:
+            self.model = torch.nn.DataParallel(self.model)
+
+    
+    def _write_file_bytes(self, path: str, data: bytes):
+        with open(path, "wb") as f:
+            f.write(data)
+
+    def load_model(self):
         # 베이스 모델/토크나이저 설정
         config_class, tokenizer_class = RobertaConfig, RobertaTokenizer
         config = config_class.from_pretrained("microsoft/graphcodebert-base")
@@ -76,8 +89,7 @@ class WPC():
         # Build model
         encoder = RobertaModel.from_pretrained(
             "microsoft/graphcodebert-base",
-            config=config,
-            add_pooling_layer=False,
+            config=config
         )
         decoder_layer = nn.TransformerDecoderLayer(d_model=config.hidden_size, nhead=config.num_attention_heads)
         decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
@@ -99,11 +111,50 @@ class WPC():
             self.model.load_state_dict(torch.load(model_path, map_location='cpu'), strict=False)
 
         self.model.to(self.device).eval()
-        if use_dataparallel and torch.cuda.device_count() > 1:
-            self.model = torch.nn.DataParallel(self.model)
 
-        # 문제 설명 토큰 캐시
-        self._desc_cache = {}
+
+    def load_model_from_pt(self):
+        """
+        단일 .pt 번들에서 tokenizer/Seq2Seq/model meta를 복원
+        """
+        pt_path = os.path.join(self.folder_path, "wpc_bundle.pt")
+        assert os.path.exists(pt_path), f"{pt_path} no exists"
+        obj = torch.load(pt_path)
+        assert obj.get("format") == "wpc_bundle_v1", "unknown bundle format"
+
+        # 1) config 복원
+        cfg = RobertaConfig.from_dict(obj["config"])
+        # pooler 경고 방지
+        cfg.add_pooling_layer = False
+
+        # 2) 토크나이저 파일을 임시 폴더에 풀고 from_pretrained
+        tmp = tempfile.mkdtemp(prefix="wpc_tok_load_")
+        try:
+            for fn, data in obj["tokenizer_files"].items():
+                self._write_file_bytes(os.path.join(tmp, fn), data)
+            self.tokenizer = RobertaTokenizer.from_pretrained(tmp)
+
+            # 3) 모델 골격 생성 → state_dict 주입
+            encoder = RobertaModel(cfg)  # from_pretrained 대신 config로 빈 모형 생성
+            decoder_layer = nn.TransformerDecoderLayer(
+                d_model=cfg.hidden_size,
+                nhead=cfg.num_attention_heads,
+            )
+            decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
+
+            self.model = Seq2Seq(
+                encoder=encoder,
+                decoder=decoder,
+                config=cfg,
+                beam_size=AiConfig.beam_size,
+                max_length=AiConfig.max_length,
+                sos_id=self.tokenizer.cls_token_id,
+                eos_id=self.tokenizer.sep_token_id,
+            )
+            self.model.load_state_dict(obj["state_dict"], strict=False)
+            self.model.to(self.device).eval()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
     def extract_dataflow(self, code):
         """
@@ -378,6 +429,5 @@ class WPC():
             text = text.replace(v, str(k, 'utf-8'))
 
         return text, generalized_code
-
-
+    
 wpc = WPC()
