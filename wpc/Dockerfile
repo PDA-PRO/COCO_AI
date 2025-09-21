@@ -1,6 +1,7 @@
 FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
 
 WORKDIR /coco
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 COPY reference ./reference
 COPY desc ./desc
 ADD wpc_bundle.pt ./wpc_bundle.pt

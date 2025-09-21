@@ -30,9 +30,8 @@ class Seq2Seq(nn.Module):
         # RoBERTa position embeddings limit is typically 514: clamp by config and max_length
         cfg_L = getattr(config, "max_position_embeddings", 514)
         L = min(max_length if max_length is not None else cfg_L, cfg_L)
-        # Upper-triangular (strict) is -inf; diagonal and below are 0.
-        tgt_mask_base = torch.triu(torch.full((L, L), float("-inf")), diagonal=1)
-        self.register_buffer("tgt_mask_base", tgt_mask_base)
+        tgt_mask_base_bool = torch.triu(torch.ones((L, L), dtype=torch.bool), diagonal=1)
+        self.register_buffer("tgt_mask_base", tgt_mask_base_bool)
 
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
@@ -50,6 +49,13 @@ class Seq2Seq(nn.Module):
             first_module.weight = nn.Parameter(second_module.weight.clone())
         else:
             first_module.weight = second_module.weight
+
+    def _bucket_len(self, L: int, buckets=(32, 64, 128, 256, 512)) -> int:
+        """입력 길이 L을 가장 가까운 상위 버킷으로 올림."""
+        for b in buckets:
+            if L <= b:
+                return b
+        return buckets[-1]
 
     def tie_weights(self):
         """ Share the input and output embeddings. """
@@ -88,33 +94,35 @@ class Seq2Seq(nn.Module):
             # Context per sample
             context = encoder_output[:, i:i+1]           # [S, 1, H]
             context_mask_i = source_mask[i:i+1, :]       # [1, S]
-
-            beam = Beam(self.beam_size, self.sos_id, self.eos_id, device=device)
-            input_ids = beam.getCurrentState()           # [K, 1]
-
             # Expand context to beam without allocating new memory
             context = context.expand(-1, self.beam_size, -1)           # [S, K, H]
             context_mask = context_mask_i.expand(self.beam_size, -1)   # [K, S]
+
+            S = context.size(0)
+            Sb = self._bucket_len(S, buckets=(64, 128, 256, 512))    # 필요에 맞게 조정
+            if S < Sb:
+                # context 패딩: 아래로 0 패딩
+                pad_ctx = torch.zeros((Sb - S, self.beam_size, self.config.hidden_size),
+                                    dtype=context.dtype, device=context.device)
+                context = torch.cat([context, pad_ctx], dim=0)       # [Sb, K, H]
+
+                # context_mask 패딩: 추가 구간은 '패딩(무효)' → 0 채움
+                pad_m = torch.zeros((self.beam_size, Sb - S),
+                                    dtype=context_mask.dtype, device=context_mask.device)
+                context_mask = torch.cat([context_mask, pad_m], dim=1)  # [K, Sb]
+            else:
+                # 혹시 S가 버킷보다 크면 자르는 것도 가능(보통 max_source_length로 이미 제한됨)
+                context = context[:Sb]
+                context_mask = context_mask[:, :Sb]
+
+            beam = Beam(self.beam_size, self.sos_id, self.eos_id, device=device)
+            input_ids = beam.getCurrentState()           # [K, 1]
 
             for _ in range(self.max_length):
                 if beam.done():
                     break
 
-                L_step = input_ids.size(1)
-                tgt_mask = self.tgt_mask_base[:L_step, :L_step]        # [L, L], float
-
-                # Decoder input embeddings: use encoder's embeddings (includes position embeddings)
-                tgt_embeddings = self.encoder.embeddings(input_ids).transpose(0, 1)  # [L, K, D]
-
-                out = self.decoder(
-                    tgt_embeddings,
-                    context,
-                    tgt_mask=tgt_mask,
-                    memory_key_padding_mask=(1 - context_mask).bool()
-                )
-                out = torch.tanh(self.dense(out))       # [L, K, H]
-                hidden_states = out[-1]                 # last step: [K, H]
-                log_probs = self.lsm(self.lm_head(hidden_states))  # [K, V]
+                log_probs = self.decode_step(input_ids, context, context_mask)
 
                 beam.advance(log_probs)
                 # Safely select origins (no .data)
@@ -132,7 +140,56 @@ class Seq2Seq(nn.Module):
 
         preds = torch.cat(preds, 0)
         return preds
+    
+    def decode_step(self, input_ids, context, context_mask):
+        """
+        한 스텝 디코딩의 수치연산만 수행하여 log_probs를 반환.
+        - 버킷 패딩으로 L 종류를 제한해 Inductor CUDAGraph 오버헤드 감소
+        input_ids: [K, L] (현재까지 생성된 토큰)
+        context:   [S, K, H]
+        context_mask: [K, S]
+        반환: [K, V]
+        """
+        K, L = input_ids.size(0), input_ids.size(1)
+        Lb = self._bucket_len(L)                       # 버킷 길이 선택 (예: 32/64/128/256/512)
 
+        # 1) tgt 마스크: [Lb, Lb] (사전계산 버퍼에서 슬라이스)
+        tgt_mask = self.tgt_mask_base[:Lb, :Lb]          # dtype=bool
+
+        # 2) input_ids를 오른쪽 패딩하여 [K, Lb]로 맞춤 (pad_token_id 사용 권장)
+        if L < Lb:
+            pad_id = getattr(self.config, "pad_token_id", self.eos_id)
+            pad = input_ids.new_full((K, Lb - L), pad_id)
+            input_ids_padded = torch.cat([input_ids, pad], dim=1)
+        else:
+            input_ids_padded = input_ids
+
+        # 3) tgt_key_padding_mask: 패딩 위치(True=mask)
+        #   - 디코더는 이 마스크로 패딩 토큰에 대한 어텐션/업데이트를 막음
+        if L < Lb:
+            false_part = torch.zeros((K, L), dtype=torch.bool, device=input_ids.device)
+            true_part  = torch.ones((K, Lb - L), dtype=torch.bool, device=input_ids.device)
+            tgt_kpm = torch.cat([false_part, true_part], dim=1)  # [K, Lb]
+        else:
+            tgt_kpm = torch.zeros((K, Lb), dtype=torch.bool, device=input_ids.device)
+
+        # 4) 임베딩 → 디코더 호출
+        tgt_embeddings = self.encoder.embeddings(input_ids_padded).transpose(0, 1)  # [Lb, K, D]
+        out = self.decoder(
+            tgt_embeddings,
+            context,
+            tgt_mask=tgt_mask,                              # bool
+            tgt_key_padding_mask=tgt_kpm,                   # bool
+            memory_key_padding_mask=(1 - context_mask).bool()
+        )
+
+
+        out = torch.tanh(self.dense(out))                    # [Lb, K, H]
+
+        # 5) 진짜 마지막 위치 L-1의 히든만 사용 (패딩 구간은 버림)
+        hidden_states = out[L - 1]                           # [K, H]
+        log_probs = self.lsm(self.lm_head(hidden_states))    # [K, V]
+        return log_probs
 
 class Beam(object):
     def __init__(self, size, sos, eos, device):
@@ -225,8 +282,12 @@ class Beam(object):
         for _, timestep, k in beam_res:
             hyp = []
             for j in range(len(self.prevKs[:timestep]) - 1, -1, -1):
-                hyp.append(self.nextYs[j + 1][k])
-                k = self.prevKs[j][k]
+                # k는 tensor 스칼라일 수 있으므로 파이썬 int로 변환
+                idx = k.item() if torch.is_tensor(k) else int(k)
+                tok = self.nextYs[j+1][idx]
+                hyp.append(tok)
+                # 다음 스텝의 backpointer도 동일하게 int 인덱싱
+                k = self.prevKs[j][idx]
             hyps.append(hyp[::-1])
         return hyps
 
