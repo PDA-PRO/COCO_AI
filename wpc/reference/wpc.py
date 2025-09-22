@@ -27,8 +27,6 @@ import random
 import logging
 from io import open
 import torch.nn as nn
-import torch._inductor.config as inductor_cfg
-import torch._dynamo as dynamo
 from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer)
 from .parser.DFG import DFG_python
 from .parser.utils import (remove_comments_and_docstrings,
@@ -40,7 +38,7 @@ from .model import Seq2Seq
 
 
 class WPC():
-    def __init__(self, use_cuda: bool = True, use_dataparallel: bool = False):
+    def __init__(self, use_cuda: bool = True, use_dataparallel: bool = False, use_compile: bool = False):
         # 로거 설정
         logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
@@ -79,28 +77,32 @@ class WPC():
         if use_dataparallel and torch.cuda.device_count() > 1:
             self.model = torch.nn.DataParallel(self.model)
 
-        inductor_cfg.max_autotune = False
-        dynamo.config.cache_size_limit = 64
+        if use_compile:
+            import torch._inductor.config as inductor_cfg
+            import torch._dynamo as dynamo
+            
+            inductor_cfg.max_autotune = False
+            dynamo.config.cache_size_limit = 64
 
-        self.model.decode_step = torch.compile(
-            self.model.decode_step,
-            mode="reduce-overhead",     # 초기 지연 낮음
-            fullgraph=False,            # 그래프 브레이크 허용
-            dynamic=True                # 길이 가변 대응
-        )
+            self.model.decode_step = torch.compile(
+                self.model.decode_step,
+                mode="reduce-overhead",     # 초기 지연 낮음
+                fullgraph=False,            # 그래프 브레이크 허용
+                dynamic=True                # 길이 가변 대응
+            )
 
-        # 버킷 목록( decode_step의 _bucket_len과 일치 )
-        L_BUCKETS = (32, 64, 128, 256, 512)
-        S_BUCKETS = (64, 128, 256, 512)
-        
-        with torch.inference_mode():
-            K, H = AiConfig.beam_size, self.model.config.hidden_size
-            for Lb in L_BUCKETS:
-                for Sb in S_BUCKETS:
-                    input_ids   = torch.zeros((K, Lb), dtype=torch.long, device=self.device)
-                    context     = torch.zeros((Sb, K, H), dtype=torch.float32, device=self.device)
-                    context_mask= torch.ones((K, Sb),   dtype=torch.long,  device=self.device)  # ‘유효=1’
-                    _ = self.model.decode_step(input_ids, context, context_mask)
+            # 버킷 목록( decode_step의 _bucket_len과 일치 )
+            L_BUCKETS = (32, 64, 128, 256, 512)
+            S_BUCKETS = (64, 128, 256, 512)
+            
+            with torch.inference_mode():
+                K, H = AiConfig.beam_size, self.model.config.hidden_size
+                for Lb in L_BUCKETS:
+                    for Sb in S_BUCKETS:
+                        input_ids   = torch.zeros((K, Lb), dtype=torch.long, device=self.device)
+                        context     = torch.zeros((Sb, K, H), dtype=torch.float32, device=self.device)
+                        context_mask= torch.ones((K, Sb),   dtype=torch.long,  device=self.device)  # ‘유효=1’
+                        _ = self.model.decode_step(input_ids, context, context_mask)
 
     
     def _write_file_bytes(self, path: str, data: bytes):
