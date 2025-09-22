@@ -25,8 +25,6 @@ import tree_sitter_python as tspython
 import os, tempfile, shutil, torch
 import random
 import logging
-from io import open
-import torch.nn as nn
 from transformers import (RobertaConfig, RobertaModel, RobertaTokenizer)
 from .parser.DFG import DFG_python
 from .parser.utils import (remove_comments_and_docstrings,
@@ -75,12 +73,12 @@ class WPC():
         self.load_model_from_pt()
 
         if use_dataparallel and torch.cuda.device_count() > 1:
-            self.model = torch.nn.DataParallel(self.model)
+            self.model = torch.torch.nn.DataParallel(self.model)
 
         if use_compile:
             import torch._inductor.config as inductor_cfg
             import torch._dynamo as dynamo
-            
+
             inductor_cfg.max_autotune = False
             dynamo.config.cache_size_limit = 64
 
@@ -121,8 +119,8 @@ class WPC():
             "microsoft/graphcodebert-base",
             config=config
         )
-        decoder_layer = nn.TransformerDecoderLayer(d_model=config.hidden_size, nhead=config.num_attention_heads)
-        decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
+        decoder_layer = torch.nn.TransformerDecoderLayer(d_model=config.hidden_size, nhead=config.num_attention_heads)
+        decoder = torch.nn.TransformerDecoder(decoder_layer, num_layers=6)
         self.model = Seq2Seq(
             encoder=encoder,
             decoder=decoder,
@@ -166,11 +164,11 @@ class WPC():
 
             # 3) 모델 골격 생성 → state_dict 주입
             encoder = RobertaModel(cfg)  # from_pretrained 대신 config로 빈 모형 생성
-            decoder_layer = nn.TransformerDecoderLayer(
+            decoder_layer = torch.nn.TransformerDecoderLayer(
                 d_model=cfg.hidden_size,
                 nhead=cfg.num_attention_heads,
             )
-            decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
+            decoder = torch.nn.TransformerDecoder(decoder_layer, num_layers=6)
 
             self.model = Seq2Seq(
                 encoder=encoder,
@@ -458,5 +456,3 @@ class WPC():
             text = text.replace(v, str(k, 'utf-8'))
 
         return text, generalized_code
-    
-wpc = WPC()
