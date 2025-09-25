@@ -21,7 +21,7 @@ class Inference:
         self.wpc = WPC()
         print(f"snapshotting {snapshot_key}")
 
-    @modal.asgi_app()
+    @modal.asgi_app(requires_proxy_auth=True)
     def fastapi_app(self):
         from fastapi import FastAPI, HTTPException
 
